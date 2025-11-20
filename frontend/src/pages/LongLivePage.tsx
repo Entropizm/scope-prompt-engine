@@ -17,7 +17,7 @@ import {
   getDefaultResolution,
 } from "../lib/utils";
 import { toast } from "sonner";
-import { Sparkles, Radio, Disc3, Bot, Timer, Download } from "lucide-react";
+import { Sparkles, Radio, Disc3, Bot, Timer, Download, Send } from "lucide-react";
 
 const ACTION_INTERVAL_SECONDS = 8;
 
@@ -37,6 +37,7 @@ export function LongLivePage() {
   const [recordingFileName, setRecordingFileName] = useState<string | null>(
     null
   );
+  const [customCue, setCustomCue] = useState("");
 
   const {
     remoteStream,
@@ -212,11 +213,20 @@ export function LongLivePage() {
 
   const handleThemeSelect = useCallback(
     async (theme: StoryTheme) => {
+      // Don't allow switching themes while one is already active
+      if (isStoryLoading || isStreaming) {
+        toast.info("Please stop the current channel before switching");
+        return;
+      }
+
       setIsStoryLoading(true);
       setSelectedThemeId(theme.id);
       try {
         const session = await startStorySession(theme.id);
         await applyStoryState(session);
+        toast.success(`Tuned into ${theme.label}`, {
+          description: "Stream starting...",
+        });
       } catch (error) {
         console.error(error);
         toast.error("Failed to open channel", {
@@ -228,7 +238,7 @@ export function LongLivePage() {
         setIsStoryLoading(false);
       }
     },
-    [applyStoryState]
+    [applyStoryState, isStoryLoading, isStreaming]
   );
 
   const handleCueSubmit = useCallback(
@@ -248,6 +258,17 @@ export function LongLivePage() {
       }
     },
     [applyStoryState]
+  );
+
+  const handleCustomCueSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!customCue.trim() || !storyState) return;
+      
+      await handleCueSubmit(customCue.trim());
+      setCustomCue("");
+    },
+    [customCue, storyState, handleCueSubmit]
   );
 
   const storyParagraphs = useMemo(() => {
@@ -302,6 +323,9 @@ export function LongLivePage() {
       recorder.start();
       mediaRecorderRef.current = recorder;
       setRecordingStatus("recording");
+      toast.success("Recording started", {
+        description: "Click 'Stop & Download' when finished",
+      });
     } catch (error) {
       console.error(error);
       toast.error("Recording failed to start", {
@@ -312,16 +336,28 @@ export function LongLivePage() {
   }, [recordingStatus, remoteStream]);
 
   const handleStopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && recordingStatus === "recording") {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state === "recording") {
+      recorder.stop();
+      mediaRecorderRef.current = null;
+      toast.success("Recording stopped", {
+        description: "Your video will download shortly",
+      });
+    }
+  }, []);
+
+  const handleStopStream = useCallback(() => {
+    // Stop recording if it's active
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current = null;
     }
-  }, [recordingStatus]);
-
-  const handleStopStream = useCallback(() => {
+    
     stopStream();
     setStoryState(null);
     setSelectedThemeId(null);
+    setRecordingStatus("idle");
+    toast.info("Stream powered down");
   }, [stopStream]);
 
   return (
@@ -330,17 +366,28 @@ export function LongLivePage() {
       <div className="longlive-stars longlive-stars--mid" />
       <div className="longlive-stars longlive-stars--back" />
 
+      <header className="longlive-header">
+        <div className="longlive-header__logo">
+          <Sparkles size={24} />
+          <h1>INTERDIMENSIONAL CABLE</h1>
+        </div>
+        <div className="longlive-header__subtitle">
+          <span>LongLive Story Console</span>
+          <span className="longlive-header__divider">•</span>
+          <span>Infinite Channels, Infinite Chaos</span>
+        </div>
+      </header>
+
       <main className="longlive-grid">
         <section className="longlive-panel longlive-panel--menu">
           <header className="longlive-panel__header">
             <div className="longlive-pill">
-              <Sparkles size={16} />
-              <span>Interdimensional Cable</span>
+              <Radio size={16} />
+              <span>Channel Select</span>
             </div>
-            <h1>LongLive Story Console</h1>
+            <h2>Choose Your Reality</h2>
             <p>
-              Tune into a cosmic channel, let Claude choreograph the storyline,
-              and steer the action with dimensional cue buttons.
+              Pick a channel to start streaming. Claude will generate the narrative in real-time.
             </p>
           </header>
 
@@ -487,6 +534,24 @@ export function LongLivePage() {
                 </button>
               ))}
             </div>
+
+            <form onSubmit={handleCustomCueSubmit} className="longlive-custom-cue">
+              <input
+                type="text"
+                value={customCue}
+                onChange={(e) => setCustomCue(e.target.value)}
+                placeholder="Enter custom prompt or cue..."
+                disabled={!storyState || isCueSubmitting}
+                className="longlive-custom-cue__input"
+              />
+              <button
+                type="submit"
+                disabled={!customCue.trim() || !storyState || isCueSubmitting}
+                className="longlive-custom-cue__button"
+              >
+                <Send size={16} />
+              </button>
+            </form>
 
             <div className="longlive-narrative-feed">
               {storyParagraphs.length === 0 ? (

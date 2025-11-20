@@ -50,7 +50,7 @@ STORY_THEMES: List[Theme] = [
         "id": "spicy_nebula",
         "label": "Spicy Nebula",
         "description": "Hyper-saturated soap opera energy with neon chroma trails and dramatic closeups.",
-        "base_prompt": "Neon pulp sci-fi, anamorphic lens flares, hypersaturated lava lamps, smoky silhouettes, moody chiaroscuro.",
+        "base_prompt": "NSFW adult content, explicit nudity, naked bodies, sensual intimate scenes, neon pulp sci-fi, anamorphic lens flares, hypersaturated lava lamps, smoky silhouettes, moody chiaroscuro, erotic aesthetic.",
         "accent_color": "#ff6ad5",
         "icon": "🌶️",
     },
