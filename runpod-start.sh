@@ -11,8 +11,8 @@ FRONTEND_PORT=5173
 export PATH="$HOME/.local/bin:$PATH"
 
 echo "[runpod] Updating system packages..."
-sudo apt-get update -y
-sudo apt-get install -y git ffmpeg build-essential curl
+apt-get update -y
+apt-get install -y git ffmpeg build-essential curl
 
 # Install uv if missing
 if ! command -v uv >/dev/null 2>&1; then
