@@ -7,6 +7,12 @@ APP_DIR="/workspace/scope-prompt-engine"
 BACKEND_PORT=8000
 FRONTEND_PORT=5173
 
+# Models directory - use /workspace for persistent storage on RunPod
+export DAYDREAM_SCOPE_MODELS_DIR="/workspace/.daydream-scope/models"
+
+# Clear cache option - set CLEAR_CACHE=1 to force re-download
+CLEAR_CACHE="${CLEAR_CACHE:-0}"
+
 # Make sure PATH includes uv (if installed to ~/.local/bin)
 export PATH="$HOME/.local/bin:$PATH"
 
@@ -55,11 +61,51 @@ cd frontend
 npm install
 cd ..
 
-# Optional: pre-download models
-if [ -f "download_models.py" ]; then
-  echo "[runpod] Downloading models..."
-  uv run python download_models.py || echo "[runpod] Model download failed or skipped."
+# Handle model cache
+if [ "$CLEAR_CACHE" = "1" ]; then
+  echo "[runpod] CLEAR_CACHE=1 detected, removing existing models..."
+  rm -rf "$DAYDREAM_SCOPE_MODELS_DIR"
+  mkdir -p "$DAYDREAM_SCOPE_MODELS_DIR"
 fi
+
+# Check if models exist before downloading
+if [ -f "download_models.py" ]; then
+  echo "[runpod] Checking for existing models at: $DAYDREAM_SCOPE_MODELS_DIR"
+  
+  # Check if models directory has content
+  if [ -d "$DAYDREAM_SCOPE_MODELS_DIR" ] && [ "$(ls -A $DAYDREAM_SCOPE_MODELS_DIR)" ]; then
+    echo "[runpod] Models directory exists and has content. Checking if complete..."
+    
+    # Try to verify models are complete using Python
+    MODEL_CHECK=$(uv run python -c "
+from lib.models_config import models_are_downloaded
+import sys
+pipeline = '${PIPELINE:-longlive}'
+if models_are_downloaded(pipeline):
+    print('complete')
+else:
+    print('incomplete')
+" 2>/dev/null || echo "incomplete")
+    
+    if [ "$MODEL_CHECK" = "complete" ]; then
+      echo "[runpod] ✓ Models already downloaded and verified for pipeline: ${PIPELINE:-longlive}"
+    else
+      echo "[runpod] ⚠ Models incomplete or verification failed. Downloading..."
+      uv run python download_models.py --pipeline "${PIPELINE:-longlive}" || echo "[runpod] Model download failed."
+    fi
+  else
+    echo "[runpod] No existing models found. Downloading..."
+    mkdir -p "$DAYDREAM_SCOPE_MODELS_DIR"
+    uv run python download_models.py --pipeline "${PIPELINE:-longlive}" || echo "[runpod] Model download failed."
+  fi
+else
+  echo "[runpod] download_models.py not found, skipping model download."
+fi
+
+# Show disk usage
+echo "[runpod] Disk usage for models directory:"
+du -sh "$DAYDREAM_SCOPE_MODELS_DIR" 2>/dev/null || echo "No models directory yet"
+df -h /workspace | grep -E '(Filesystem|/workspace)' || df -h /workspace
 
 # Start backend
 echo "[runpod] Starting backend on 0.0.0.0:${BACKEND_PORT}..."

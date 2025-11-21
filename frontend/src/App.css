@@ -1,22 +1,76 @@
 .longlive-shell {
   position: relative;
   min-height: 100vh;
-  background: radial-gradient(circle at top, #10203b 0%, #070c14 55%, #04060b 100%);
+  background: 
+    radial-gradient(circle at 20% 80%, rgba(255, 0, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(0, 255, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at top, #10203b 0%, #070c14 55%, #04060b 100%);
   color: #f1f5ff;
   overflow: hidden;
   padding: 0;
   display: flex;
   flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Subtle scanline effect */
+.longlive-shell::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 255, 255, 0.03) 0px,
+    transparent 2px,
+    transparent 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+  animation: scanlines 8s linear infinite;
+}
+
+@keyframes scanlines {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(4px);
+  }
 }
 
 .longlive-header {
   position: relative;
   z-index: 10;
   padding: 1.5rem 2rem;
-  background: linear-gradient(180deg, rgba(4, 11, 21, 0.95) 0%, rgba(4, 11, 21, 0.7) 100%);
+  background: 
+    linear-gradient(90deg, rgba(255, 0, 255, 0.05) 0%, transparent 50%, rgba(0, 255, 255, 0.05) 100%),
+    linear-gradient(180deg, rgba(4, 11, 21, 0.95) 0%, rgba(4, 11, 21, 0.7) 100%);
   backdrop-filter: blur(20px);
-  border-bottom: 2px solid rgba(129, 212, 250, 0.3);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border-bottom: 2px solid transparent;
+  border-image: linear-gradient(90deg, #ff00ff, #00ffff, #ff00ff) 1;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(0, 255, 255, 0.1),
+    0 0 40px rgba(255, 0, 255, 0.1);
+  animation: headerGlow 4s ease-in-out infinite;
+}
+
+@keyframes headerGlow {
+  0%, 100% {
+    box-shadow: 
+      0 8px 32px rgba(0, 0, 0, 0.4),
+      0 0 20px rgba(0, 255, 255, 0.1),
+      0 0 40px rgba(255, 0, 255, 0.1);
+  }
+  50% {
+    box-shadow: 
+      0 8px 32px rgba(0, 0, 0, 0.4),
+      0 0 25px rgba(0, 255, 255, 0.15),
+      0 0 50px rgba(255, 0, 255, 0.15);
+  }
 }
 
 .longlive-header__logo {
@@ -30,8 +84,24 @@
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
-  text-shadow: 0 0 20px rgba(129, 212, 250, 0.5);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, #00ffff, #ff00ff, #00ffff);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: rgbShift 3s linear infinite;
+  filter: drop-shadow(0 0 10px rgba(0, 255, 255, 0.5)) drop-shadow(0 0 20px rgba(255, 0, 255, 0.3));
+}
+
+@keyframes rgbShift {
+  0% {
+    background-position: 0% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
 }
 
 .longlive-header__subtitle {
@@ -91,12 +161,34 @@
 }
 
 .longlive-panel {
-  background: rgba(4, 11, 21, 0.8);
+  background: rgba(4, 11, 21, 0.85);
   backdrop-filter: blur(18px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid transparent;
+  border-image: linear-gradient(135deg, rgba(0, 255, 255, 0.3), rgba(255, 0, 255, 0.3)) 1;
   border-radius: 24px;
   padding: 1.5rem;
-  box-shadow: 0 25px 45px rgba(0, 0, 0, 0.4);
+  box-shadow: 
+    0 25px 45px rgba(0, 0, 0, 0.4),
+    inset 0 0 30px rgba(0, 255, 255, 0.05);
+  position: relative;
+}
+
+.longlive-panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 24px;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(0, 255, 255, 0.2), rgba(255, 0, 255, 0.2), rgba(0, 255, 255, 0.2));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.5;
 }
 
 .longlive-panel__header {
@@ -138,7 +230,7 @@
 }
 
 .longlive-theme {
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.15);
   background: rgba(4, 12, 22, 0.7);
   border-radius: 18px;
   padding: 1rem;
@@ -149,15 +241,45 @@
   align-items: center;
   cursor: pointer;
   position: relative;
-  transition: transform 200ms ease, box-shadow 200ms ease;
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
 }
 
-.longlive-theme:hover {
+.longlive-theme::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, transparent, rgba(0, 255, 255, 0.3), transparent);
+  opacity: 0;
+  transition: opacity 200ms ease;
+  z-index: -1;
+}
+
+.longlive-theme:hover:not(:disabled) {
   transform: translateY(-3px);
+  border-color: rgba(0, 255, 255, 0.5);
+}
+
+.longlive-theme:hover::before {
+  opacity: 1;
 }
 
 .longlive-theme.is-active {
   background: rgba(255, 255, 255, 0.05);
+  border-color: currentColor;
+  animation: activeThemeGlow 2s ease-in-out infinite;
+}
+
+@keyframes activeThemeGlow {
+  0%, 100% {
+    box-shadow: 0 0 20px currentColor;
+  }
+  50% {
+    box-shadow: 0 0 30px currentColor;
+  }
 }
 
 .longlive-theme__icon {
@@ -255,6 +377,63 @@
   padding: 1.5rem;
   text-align: center;
   color: rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+}
+
+/* Portal effect background */
+.longlive-screen__placeholder::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at center, transparent 30%, rgba(0, 255, 255, 0.1) 30%, rgba(0, 255, 255, 0.1) 31%, transparent 31%),
+    radial-gradient(circle at center, transparent 40%, rgba(255, 0, 255, 0.1) 40%, rgba(255, 0, 255, 0.1) 41%, transparent 41%),
+    radial-gradient(circle at center, transparent 50%, rgba(0, 255, 255, 0.05) 50%, rgba(0, 255, 255, 0.05) 51%, transparent 51%);
+  animation: portalSpin 10s linear infinite;
+  opacity: 0.6;
+}
+
+/* Swirling particles */
+.longlive-screen__placeholder::after {
+  content: "";
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  background:
+    radial-gradient(circle, rgba(0, 255, 255, 0.4) 2px, transparent 2px),
+    radial-gradient(circle, rgba(255, 0, 255, 0.4) 2px, transparent 2px);
+  background-size: 50px 50px, 75px 75px;
+  background-position: 0 0, 25px 25px;
+  animation: portalParticles 20s linear infinite;
+  opacity: 0.3;
+}
+
+.longlive-screen__placeholder > * {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes portalSpin {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.2);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+@keyframes portalParticles {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .longlive-screen__ticker {
@@ -348,8 +527,9 @@
 }
 
 .longlive-cue {
+  position: relative;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.15);
   padding: 0.85rem 1rem;
   background: rgba(9, 16, 28, 0.8);
   cursor: pointer;
@@ -358,12 +538,63 @@
   color: #f1f5ff;
   font-size: 0.9rem;
   font-family: inherit;
+  overflow: hidden;
+}
+
+.longlive-cue::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--progress, 0%);
+  height: 100%;
+  background: linear-gradient(90deg, rgba(129, 212, 250, 0.15), rgba(129, 212, 250, 0.25));
+  transition: width 1s linear;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.longlive-cue__text {
+  position: relative;
+  z-index: 1;
+  display: block;
+}
+
+.longlive-cue__badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: linear-gradient(135deg, #81d4fa, #4fc3f7);
+  color: #000;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: 0 2px 8px rgba(129, 212, 250, 0.5);
+  z-index: 2;
+  animation: badgePulse 2s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.longlive-cue--recommended {
+  border-color: rgba(129, 212, 250, 0.4);
+  box-shadow: 0 0 15px rgba(129, 212, 250, 0.3);
 }
 
 .longlive-cue:hover:not(:disabled) {
   transform: translateY(-2px);
   background: rgba(9, 16, 28, 0.95);
-  border-color: rgba(129, 212, 250, 0.3);
+  border-color: rgba(129, 212, 250, 0.5);
 }
 
 .longlive-cue:disabled {
@@ -603,42 +834,192 @@
 }
 
 @media (max-width: 768px) {
+  /* TikTok-style mobile layout */
   .longlive-shell {
     padding: 0;
   }
   
   .longlive-header {
-    padding: 1rem;
+    padding: 0.75rem 1rem;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
   }
   
   .longlive-header__logo h1 {
-    font-size: 1.2rem;
+    font-size: 1rem;
   }
   
   .longlive-header__subtitle {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     flex-wrap: wrap;
   }
   
   .longlive-grid {
-    padding: 1rem;
-    gap: 1rem;
+    padding: 0;
+    gap: 0;
+    grid-template-columns: 1fr;
+    padding-top: 100px; /* Account for fixed header */
+    min-height: 100vh;
   }
   
-  .longlive-panel {
-    padding: 1rem;
+  /* Full-screen video area */
+  .longlive-panel--screen {
+    position: fixed;
+    inset: 0;
+    padding: 0;
+    border-radius: 0;
+    border: none;
+    background: #000;
+    z-index: 1;
+    padding-top: 100px;
   }
   
+  .longlive-screen {
+    height: 100%;
+    padding: 0;
+    border-radius: 0;
+    background: #000;
+  }
+  
+  .longlive-screen__bezel {
+    height: calc(100vh - 100px);
+    border-radius: 0;
+  }
+  
+  /* TikTok-style sidebar buttons */
   .longlive-controls {
+    position: fixed;
+    right: 0.75rem;
+    bottom: 140px;
     flex-direction: column;
+    gap: 0.75rem;
+    z-index: 10;
   }
   
   .longlive-btn {
-    width: 100%;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    padding: 0;
     justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(10px);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+  
+  .longlive-btn svg {
+    margin: 0;
+  }
+  
+  .longlive-btn span {
+    display: none;
+  }
+  
+  /* Bottom sheet for cues and story */
+  .longlive-story {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    max-height: 50vh;
+    background: rgba(4, 11, 21, 0.95);
+    backdrop-filter: blur(20px);
+    border-radius: 20px 20px 0 0;
+    padding: 1rem;
+    overflow-y: auto;
+    border-top: 2px solid rgba(0, 255, 255, 0.3);
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+  }
+  
+  .longlive-story header {
+    position: sticky;
+    top: 0;
+    background: rgba(4, 11, 21, 0.95);
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 1;
   }
   
   .longlive-cues {
     grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  
+  .longlive-cue {
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+  }
+  
+  .longlive-custom-cue {
+    margin-top: 0.75rem;
+  }
+  
+  .longlive-custom-cue__input {
+    font-size: 0.9rem;
+  }
+  
+  .longlive-narrative-feed {
+    max-height: 150px;
+  }
+  
+  /* Hide side panels on mobile */
+  .longlive-panel--menu,
+  .longlive-panel--log {
+    position: fixed;
+    top: 100px;
+    left: -100%;
+    width: 85%;
+    height: calc(100vh - 100px);
+    z-index: 50;
+    transition: left 0.3s ease;
+    overflow-y: auto;
+  }
+  
+  .longlive-panel--menu {
+    left: -100%;
+  }
+  
+  /* Add swipe indicator */
+  .longlive-panel--menu::before {
+    content: "← Swipe";
+    position: fixed;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 255, 255, 0.2);
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    animation: swipeHint 2s ease-in-out infinite;
+    pointer-events: none;
+  }
+  
+  @keyframes swipeHint {
+    0%, 100% {
+      opacity: 0.5;
+      transform: translateY(-50%) translateX(0);
+    }
+    50% {
+      opacity: 1;
+      transform: translateY(-50%) translateX(-5px);
+    }
+  }
+  
+  .longlive-panel--log {
+    display: none; /* Hide log on mobile for simplicity */
+  }
+  
+  .longlive-recording-note {
+    position: fixed;
+    bottom: 60%;
+    left: 1rem;
+    right: 80px;
+    z-index: 15;
+    font-size: 0.75rem;
   }
 }

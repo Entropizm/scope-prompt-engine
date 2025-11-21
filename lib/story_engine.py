@@ -80,6 +80,10 @@ class StorySession:
     summary: str = ""
     last_visual_prompt: str = ""
     last_cues: List[str] = field(default_factory=lambda: DEFAULT_CUES.copy())
+    # Track scene continuity for LongLive
+    current_subjects: List[str] = field(default_factory=list)  # Characters/objects
+    current_location: str = ""  # Background/setting
+    current_style: str = ""  # Visual style keywords
 
 
 class StoryEngine:
@@ -154,8 +158,16 @@ class StoryEngine:
             model_payload = self._mock_payload(cue, session.theme)
 
         narrative = model_payload["narrative"].strip()
-        visual_prompt = model_payload["visual_prompt"].strip()
+        visual_prompt_raw = model_payload["visual_prompt"].strip()
         cues = model_payload.get("action_cues") or DEFAULT_CUES.copy()
+
+        # Post-process and enrich the visual prompt for LongLive
+        visual_prompt = self._enrich_visual_prompt(
+            visual_prompt_raw, session, theme=session.theme
+        )
+        
+        # Extract and update scene state for continuity
+        self._update_scene_state(session, visual_prompt_raw, narrative)
 
         segment = StorySegment(
             cue=cue,
@@ -221,8 +233,16 @@ class StoryEngine:
     def _system_prompt(self, theme: Theme) -> str:
         return (
             "You are the showrunner for an intergalactic TV feed that mixes narrative prose "
-            "with precise scene blocking for a realtime video diffusion model called LongLive. "
-            f"Keep the tone aligned with '{theme['label']}'."
+            "with precise scene blocking for a realtime video diffusion model called LongLive (built on Wan2.1). "
+            f"Keep the tone aligned with '{theme['label']}'.\n\n"
+            "CRITICAL RULES for visual_prompt generation:\n"
+            "1. ALWAYS include WHO/WHAT (subject/character) in EVERY prompt\n"
+            "2. ALWAYS include WHERE (location/background/setting) in EVERY prompt\n"
+            "3. Add cinematic camera angles (wide shot, close-up, tracking shot, dolly zoom, etc.)\n"
+            "4. Maintain visual consistency - restate key subjects and locations from previous scenes\n"
+            "5. LongLive excels at smooth transitions and cinematic long takes\n"
+            "6. Use vivid, concrete descriptions with lighting and atmosphere details\n"
+            "7. For style keywords: use terms like 'cinematic', 'volumetric lighting', 'depth of field', etc."
         )
 
     def _compose_prompt(self, session: StorySession, cue: str, initial: bool) -> str:
@@ -230,22 +250,38 @@ class StoryEngine:
             f"- {seg.narrative}" for seg in session.segments[-3:]
         ) or "No scenes yet."
         summary = session.summary or "Story not summarized yet."
+        
+        # Build continuity context
+        continuity_info = ""
+        if session.current_subjects:
+            continuity_info += f"Current characters/subjects: {', '.join(session.current_subjects)}\n"
+        if session.current_location:
+            continuity_info += f"Current location/setting: {session.current_location}\n"
+        if session.current_style:
+            continuity_info += f"Current visual style: {session.current_style}\n"
+        
         intro = (
-            "Open a brand new broadcast that makes the channel identity obvious."
+            "Open a brand new broadcast. Establish WHO is present and WHERE they are from the very first frame."
             if initial
-            else "Continue the live broadcast while preserving continuity."
+            else f"Continue the live broadcast. MAINTAIN CONTINUITY by re-stating subjects and location.\n{continuity_info}"
         )
+        
         return (
             f"{intro}\n"
             f"Theme context: {session.theme['description']}\n"
             f"Visual DNA: {session.theme['base_prompt']}\n\n"
             f"Condensed memory: {summary}\n"
             f"Recent beats:\n{history}\n\n"
-            f"Upcoming cue from the user: {cue}\n"
+            f"Upcoming cue from the user: {cue}\n\n"
             "Return strict JSON with keys narrative, visual_prompt, action_cues (exactly 4 strings).\n"
             "narrative = 2-4 energetic sentences referencing motion and dialogue.\n"
-            "visual_prompt = <=120 words describing cinematic shot instructions for the diffusion model.\n"
-            "action_cues = 4 short imperative options (<8 words) for the next user input."
+            "visual_prompt = 80-120 words. MUST include:\n"
+            "  - WHO/WHAT (specific subject/character)\n"
+            "  - WHERE (specific location/background)\n"
+            "  - Camera angle (wide shot, close-up, tracking, etc.)\n"
+            "  - Lighting/atmosphere details\n"
+            "  - Movement/action\n"
+            "action_cues = 4 short imperative options (<8 words) that advance the story meaningfully."
         )
 
     def _parse_model_json(self, raw: str, cue: str, theme: Theme) -> Dict[str, Any]:
@@ -307,6 +343,69 @@ class StoryEngine:
 
     def _story_text(self, session: StorySession) -> str:
         return "\n\n".join(seg.narrative for seg in session.segments).strip()
+
+    def _enrich_visual_prompt(
+        self, prompt: str, session: StorySession, theme: Theme
+    ) -> str:
+        """
+        Post-process visual prompts to ensure LongLive requirements:
+        - Add Wan2.1 specific keywords
+        - Ensure cinematic qualities
+        - Add continuity anchors if missing
+        """
+        enriched = prompt
+        
+        # Add Wan-style cinematic keywords if not present
+        cinematic_keywords = ["cinematic", "volumetric", "depth of field", "lighting"]
+        has_cinematic = any(kw in enriched.lower() for kw in cinematic_keywords)
+        if not has_cinematic:
+            enriched += ", cinematic composition with volumetric lighting and shallow depth of field"
+        
+        # Ensure theme style is present
+        if theme["base_prompt"] and len(enriched) < 100:
+            # Only add if prompt seems sparse
+            enriched = f"{enriched}. {theme['base_prompt']}"
+        
+        # Add quality tags for Wan model
+        if "4k" not in enriched.lower() and "8k" not in enriched.lower():
+            enriched += ", highly detailed, 4K quality"
+        
+        return enriched[:300]  # Cap at reasonable length
+    
+    def _update_scene_state(
+        self, session: StorySession, visual_prompt: str, narrative: str
+    ) -> None:
+        """
+        Extract subjects and locations from prompts to maintain continuity.
+        Simple keyword extraction - Claude should be providing these explicitly.
+        """
+        combined = f"{visual_prompt} {narrative}".lower()
+        
+        # Extract potential subjects (simple approach - look for key patterns)
+        # In practice, Claude should be explicit about these
+        subject_indicators = ["character", "person", "figure", "hero", "protagonist", "robot", "alien", "creature"]
+        location_indicators = ["room", "corridor", "space", "chamber", "hall", "landscape", "city", "planet", "ship"]
+        
+        # Update subjects if found (simple heuristic)
+        for indicator in subject_indicators:
+            if indicator in combined:
+                if indicator not in session.current_subjects:
+                    session.current_subjects.append(indicator)
+        
+        # Keep only last 3 subjects to avoid bloat
+        session.current_subjects = session.current_subjects[-3:]
+        
+        # Update location if found
+        for indicator in location_indicators:
+            if indicator in combined:
+                session.current_location = indicator
+                break
+        
+        # Extract style keywords
+        style_words = ["neon", "dark", "bright", "foggy", "misty", "ethereal", "dramatic"]
+        found_styles = [w for w in style_words if w in combined]
+        if found_styles:
+            session.current_style = ", ".join(found_styles[:2])
 
 
 story_engine = StoryEngine()

@@ -31,6 +31,7 @@ export function LongLivePage() {
   const [cueCountdown, setCueCountdown] = useState(ACTION_INTERVAL_SECONDS);
   const [cueTimerSeed, setCueTimerSeed] = useState(0);
   const [isCuePulse, setIsCuePulse] = useState(false);
+  const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
   const [recordingStatus, setRecordingStatus] = useState<"idle" | "recording">(
     "idle"
   );
@@ -54,6 +55,7 @@ export function LongLivePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaChunksRef = useRef<Blob[]>([]);
+  const promptLogRef = useRef<HTMLDivElement>(null);
 
   // Fetch storyline themes on mount
   useEffect(() => {
@@ -96,22 +98,38 @@ export function LongLivePage() {
     }
   }, [remoteStream]);
 
-  // Cue countdown loop
+  // Auto-scroll prompt log to bottom when new entries arrive
   useEffect(() => {
-    if (!selectedThemeId) return;
+    const logNode = promptLogRef.current;
+    if (logNode && storyState?.prompt_log) {
+      logNode.scrollTop = logNode.scrollHeight;
+    }
+  }, [storyState?.prompt_log]);
+
+  // Cue countdown loop with auto-refresh
+  useEffect(() => {
+    if (!selectedThemeId || !storyState) return;
     setCueCountdown(ACTION_INTERVAL_SECONDS);
     setIsCuePulse(false);
+    
     const timer = setInterval(() => {
       setCueCountdown(prev => {
         if (prev <= 1) {
           setIsCuePulse(true);
-          return 0;
+          // Auto-refresh cues when timer expires
+          if (!isCueSubmitting && storyState) {
+            setIsAutoRefreshing(true);
+            // Request new cues from Claude without changing the scene
+            handleCueSubmit("Continue the current scene with new possibilities")
+              .finally(() => setIsAutoRefreshing(false));
+          }
+          return ACTION_INTERVAL_SECONDS; // Reset for next cycle
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [selectedThemeId, cueTimerSeed]);
+  }, [selectedThemeId, cueTimerSeed, storyState, isCueSubmitting]);
 
   const resetCueTimer = useCallback(() => {
     setCueCountdown(ACTION_INTERVAL_SECONDS);
@@ -286,48 +304,103 @@ export function LongLivePage() {
     }
     if (recordingStatus === "recording") return;
 
-    const preferredMime = [
+    // Firefox-compatible MIME type detection
+    const mimeOptions = [
       "video/webm;codecs=vp9,opus",
       "video/webm;codecs=vp8,opus",
+      "video/webm;codecs=vp8",
       "video/webm",
-    ].find(type => MediaRecorder.isTypeSupported(type));
+    ];
+    
+    const preferredMime = mimeOptions.find(type => {
+      try {
+        return MediaRecorder.isTypeSupported(type);
+      } catch (e) {
+        return false;
+      }
+    });
+
+    if (!preferredMime) {
+      toast.error("Recording not supported", {
+        description: "Your browser doesn't support WebM recording",
+      });
+      return;
+    }
 
     try {
-      const recorder = new MediaRecorder(remoteStream, {
-        mimeType: preferredMime,
-      });
+      const options: MediaRecorderOptions = { mimeType: preferredMime };
+      
+      // Firefox works better with explicit timeslice
+      const recorder = new MediaRecorder(remoteStream, options);
+      
       mediaChunksRef.current = [];
-      recorder.ondataavailable = event => {
-        if (event.data.size > 0) {
+      
+      recorder.ondataavailable = (event) => {
+        console.log("Data available:", event.data.size, "bytes");
+        if (event.data && event.data.size > 0) {
           mediaChunksRef.current.push(event.data);
         }
       };
+      
       recorder.onstop = () => {
+        console.log("Recorder stopped, chunks:", mediaChunksRef.current.length);
         setRecordingStatus("idle");
+        
+        if (mediaChunksRef.current.length === 0) {
+          toast.error("No recording data captured");
+          return;
+        }
+        
         const blob = new Blob(mediaChunksRef.current, {
-          type: preferredMime || "video/webm",
+          type: preferredMime,
         });
+        
+        console.log("Blob created:", blob.size, "bytes", blob.type);
+        
+        if (blob.size === 0) {
+          toast.error("Recording is empty");
+          return;
+        }
+        
         const url = URL.createObjectURL(blob);
         const filename = `longlive-story-${Date.now()}.webm`;
         setRecordingFileName(filename);
 
+        // Force download with proper Firefox handling
         const anchor = document.createElement("a");
         anchor.href = url;
         anchor.download = filename;
-        anchor.click();
-
+        anchor.style.display = "none";
+        document.body.appendChild(anchor);
+        
+        // Firefox requires the element to be in DOM
         setTimeout(() => {
-          URL.revokeObjectURL(url);
-        }, 10_000);
+          anchor.click();
+          document.body.removeChild(anchor);
+          
+          setTimeout(() => {
+            URL.revokeObjectURL(url);
+          }, 10_000);
+        }, 100);
       };
-      recorder.start();
+      
+      recorder.onerror = (event) => {
+        console.error("Recording error:", event);
+        toast.error("Recording error occurred");
+        setRecordingStatus("idle");
+      };
+      
+      // Start with timeslice for Firefox compatibility (collect data every second)
+      recorder.start(1000);
       mediaRecorderRef.current = recorder;
       setRecordingStatus("recording");
+      
+      console.log("Recording started with MIME:", preferredMime);
       toast.success("Recording started", {
         description: "Click 'Stop & Download' when finished",
       });
     } catch (error) {
-      console.error(error);
+      console.error("Recording start error:", error);
       toast.error("Recording failed to start", {
         description:
           error instanceof Error ? error.message : "MediaRecorder unavailable",
@@ -337,12 +410,32 @@ export function LongLivePage() {
 
   const handleStopRecording = useCallback(() => {
     const recorder = mediaRecorderRef.current;
-    if (recorder && recorder.state === "recording") {
-      recorder.stop();
-      mediaRecorderRef.current = null;
+    
+    if (!recorder) {
+      console.log("No recorder found");
+      return;
+    }
+    
+    console.log("Recorder state:", recorder.state);
+    
+    if (recorder.state === "recording" || recorder.state === "paused") {
+      // Request final data before stopping
+      if (recorder.state === "recording") {
+        recorder.requestData();
+      }
+      
+      // Small delay to ensure data is captured
+      setTimeout(() => {
+        recorder.stop();
+        console.log("Stop signal sent to recorder");
+      }, 100);
+      
       toast.success("Recording stopped", {
-        description: "Your video will download shortly",
+        description: "Processing video...",
       });
+    } else {
+      console.log("Recorder not in recording state:", recorder.state);
+      toast.info("Recording is not active");
     }
   }, []);
 
@@ -521,18 +614,30 @@ export function LongLivePage() {
               <h2>Action cues</h2>
             </header>
             <div className="longlive-cues">
-              {(storyState?.cues || ["Boot sequence"]).map(cue => (
-                <button
-                  key={cue}
-                  className={`longlive-cue ${
-                    isCuePulse ? "longlive-cue--pulse" : ""
-                  }`}
-                  onClick={() => handleCueSubmit(cue)}
-                  disabled={isCueSubmitting || !storyState}
-                >
-                  {cue}
-                </button>
-              ))}
+              {(storyState?.cues || ["Boot sequence"]).map((cue, index) => {
+                const progress = ((ACTION_INTERVAL_SECONDS - cueCountdown) / ACTION_INTERVAL_SECONDS) * 100;
+                const isRecommended = index === 0; // First button is recommended
+                
+                return (
+                  <button
+                    key={cue}
+                    className={`longlive-cue ${
+                      isCuePulse ? "longlive-cue--pulse" : ""
+                    } ${isRecommended ? "longlive-cue--recommended" : ""}`}
+                    onClick={() => handleCueSubmit(cue)}
+                    disabled={isCueSubmitting || !storyState}
+                    style={{
+                      // @ts-ignore - CSS custom property
+                      "--progress": `${progress}%`,
+                    }}
+                  >
+                    <span className="longlive-cue__text">{cue}</span>
+                    {isRecommended && (
+                      <span className="longlive-cue__badge">Next</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             <form onSubmit={handleCustomCueSubmit} className="longlive-custom-cue">
@@ -578,7 +683,7 @@ export function LongLivePage() {
             <p>Everything we fed into Claude (and what it replied).</p>
           </header>
 
-          <div className="longlive-log">
+          <div className="longlive-log" ref={promptLogRef}>
             {(storyState?.prompt_log || []).map(entry => (
               <article
                 key={entry.id}
